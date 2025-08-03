@@ -1,0 +1,172 @@
+import java.math.BigInteger;
+import java.util.*;
+
+public class SmartCalculator {
+    private static final Map<String, BigInteger> variables = new HashMap<>();
+    private static BigInteger lastResult = BigInteger.ZERO;
+
+    public static void main(String[] args) {
+        Scanner scanner = new Scanner(System.in);
+        System.out.println("Smart Calculator Started. Type 'exit' to quit.");
+
+        while (true) {
+            System.out.print("> ");
+            String input = scanner.nextLine().trim();
+
+            if (input.equalsIgnoreCase("exit")) {
+                System.out.println("Exiting Smart Calculator.");
+                break;
+            }
+
+            if (input.isEmpty()) continue;
+
+            try {
+                if (input.contains("=")) {
+                    handleAssignment(input);
+                } else {
+                    BigInteger result = evaluateExpression(input);
+                    lastResult = result;
+                    System.out.println(result);
+                }
+            } catch (Exception e) {
+                System.out.println("Error: " + e.getMessage());
+            }
+        }
+        scanner.close();
+    }
+
+    private static void handleAssignment(String input) throws Exception {
+        String[] parts = input.split("=");
+        if (parts.length != 2)
+            throw new Exception("Invalid assignment format. Use: variable = expression");
+
+        String variable = parts[0].trim();
+        String expr = parts[1].trim();
+
+        if (!variable.matches("[a-zA-Z]+"))
+            throw new Exception("Invalid variable name. Use letters only.");
+
+        BigInteger value = evaluateExpression(expr);
+        variables.put(variable, value);
+        System.out.println(variable + " = " + value);
+    }
+
+    private static BigInteger evaluateExpression(String expr) throws Exception {
+        List<String> tokens = tokenize(expr);
+        List<String> postfix = infixToPostfix(tokens);
+        return evaluatePostfix(postfix);
+    }
+
+    private static List<String> tokenize(String expr) {
+        List<String> tokens = new ArrayList<>();
+        StringBuilder sb = new StringBuilder();
+
+        for (int i = 0; i < expr.length(); i++) {
+            char c = expr.charAt(i);
+
+            if (Character.isWhitespace(c)) continue;
+
+            if (Character.isLetterOrDigit(c)) {
+                sb.append(c);
+            } else {
+                if (sb.length() > 0) {
+                    tokens.add(sb.toString());
+                    sb.setLength(0);
+                }
+                tokens.add(String.valueOf(c));
+            }
+        }
+        if (sb.length() > 0) tokens.add(sb.toString());
+
+        return tokens;
+    }
+
+    private static int getPrecedence(String op) {
+        return switch (op) {
+            case "+", "-" -> 1;
+            case "*", "/" -> 2;
+            default -> 0;
+        };
+    }
+
+    private static boolean isOperator(String token) {
+        return "+-*/".contains(token);
+    }
+
+    private static List<String> infixToPostfix(List<String> tokens) throws Exception {
+        List<String> postfix = new ArrayList<>();
+        Stack<String> stack = new Stack<>();
+
+        for (String token : tokens) {
+            if (token.matches("\\d+")) {
+                postfix.add(token);
+            } else if (token.matches("[a-zA-Z]+")) {
+                if (token.equals("ans")) {
+                    postfix.add(lastResult.toString());
+                } else if (variables.containsKey(token)) {
+                    postfix.add(variables.get(token).toString());
+                } else {
+                    throw new Exception("Undefined variable: " + token);
+                }
+            } else if (isOperator(token)) {
+                while (!stack.isEmpty() && isOperator(stack.peek())
+                        && getPrecedence(stack.peek()) >= getPrecedence(token)) {
+                    postfix.add(stack.pop());
+                }
+                stack.push(token);
+            } else if (token.equals("(")) {
+                stack.push(token);
+            } else if (token.equals(")")) {
+                while (!stack.isEmpty() && !stack.peek().equals("(")) {
+                    postfix.add(stack.pop());
+                }
+                if (stack.isEmpty() || !stack.peek().equals("(")) {
+                    throw new Exception("Mismatched parentheses.");
+                }
+                stack.pop();
+            } else {
+                throw new Exception("Invalid token: " + token);
+            }
+        }
+        while (!stack.isEmpty()) {
+            if (stack.peek().equals("("))
+                throw new Exception("Mismatched parentheses.");
+            postfix.add(stack.pop());
+        }
+        return postfix;
+    }
+
+    private static BigInteger evaluatePostfix(List<String> postfix) throws Exception {
+        Stack<BigInteger> stack = new Stack<>();
+
+        for (String token : postfix) {
+            if (token.matches("\\d+")) {
+                stack.push(new BigInteger(token));
+            } else if (isOperator(token)) {
+                if (stack.size() < 2)
+                    throw new Exception("Invalid expression.");
+
+                BigInteger b = stack.pop();
+                BigInteger a = stack.pop();
+
+                BigInteger result = switch (token) {
+                    case "+" -> a.add(b);
+                    case "-" -> a.subtract(b);
+                    case "*" -> a.multiply(b);
+                    case "/" -> {
+                        if (b.equals(BigInteger.ZERO))
+                            throw new Exception("Division by zero.");
+                        yield a.divide(b);
+                    }
+                    default -> throw new Exception("Unknown operator: " + token);
+                };
+                stack.push(result);
+            } else {
+                throw new Exception("Invalid token in evaluation: " + token);
+            }
+        }
+        if (stack.size() != 1)
+            throw new Exception("Invalid expression.");
+        return stack.pop();
+    }
+}
